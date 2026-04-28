@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layout,
   Menu,
@@ -8,7 +8,8 @@ import {
   Modal,
   Select,
   message,
-  Tag
+  Tag,
+  Spin
 } from 'antd';
 import {
   GlobalOutlined,
@@ -17,12 +18,14 @@ import {
   FileTextOutlined,
   DownloadOutlined,
   EyeOutlined,
-  CodeOutlined
+  CodeOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined
 } from '@ant-design/icons';
 import URLInput from './components/URLInput';
 import AnalysisResult from './components/AnalysisResult';
 import LLMConfig from './components/LLMConfig';
-import { cssAnalyzerApi } from './services/api';
+import { cssAnalyzerApi, llmConfigApi } from './services/api';
 import './index.css';
 
 const { Header, Content, Sider } = Layout;
@@ -31,33 +34,33 @@ const { Title } = Typography;
 const App = () => {
   const [currentMenu, setCurrentMenu] = useState('analyze');
   const [analysisData, setAnalysisData] = useState(null);
+  const [analysisId, setAnalysisId] = useState(null);
   const [llmConfigured, setLlmConfigured] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exportFormat, setExportFormat] = useState('html');
   const [exporting, setExporting] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const menuItems = [
-    {
-      key: 'analyze',
-      icon: <GlobalOutlined />,
-      label: 'CSS Analysis'
-    },
-    {
-      key: 'results',
-      icon: <BarChartOutlined />,
-      label: 'Analysis Results',
-      disabled: !analysisData
-    },
-    {
-      key: 'llm',
-      icon: <SettingOutlined />,
-      label: 'LLM Configuration'
+  useEffect(() => {
+    checkLLMStatus();
+  }, []);
+
+  const checkLLMStatus = async () => {
+    try {
+      const status = await llmConfigApi.getStatus();
+      setLlmConfigured(status.configured);
+    } catch (error) {
+      console.error('Failed to check LLM status:', error);
     }
-  ];
+  };
 
   const handleAnalysisComplete = (data) => {
-    setAnalysisData(data);
+    if (data.analysis_id && data.result) {
+      setAnalysisId(data.analysis_id);
+      setAnalysisData(data.result);
+    } else {
+      setAnalysisData(data);
+    }
     setCurrentMenu('results');
   };
 
@@ -66,17 +69,11 @@ const App = () => {
   };
 
   const handleExportReport = async () => {
-    if (!analysisData) {
-      message.warning('No analysis data to export');
-      return;
-    }
-    
     setExporting(true);
     try {
-      const result = await cssAnalyzerApi.exportReport('temp', exportFormat);
+      const result = await cssAnalyzerApi.exportCurrentReport(exportFormat);
       
       if (result.success) {
-        setGeneratedReport(result.report);
         message.success('Report generated successfully!');
         
         if (exportFormat === 'html' && result.report?.content) {
@@ -102,12 +99,45 @@ const App = () => {
         }
       }
     } catch (error) {
-      message.error('Failed to generate report: ' + (error.message || 'Unknown error'));
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+      message.error('Failed to generate report: ' + errorMsg);
     } finally {
       setExporting(false);
       setExportModalVisible(false);
     }
   };
+
+  const menuItems = [
+    {
+      key: 'analyze',
+      icon: <GlobalOutlined />,
+      label: 'CSS Analysis'
+    },
+    {
+      key: 'results',
+      icon: <BarChartOutlined />,
+      label: 'Analysis Results',
+      disabled: !analysisData
+    },
+    {
+      key: 'llm',
+      icon: <SettingOutlined />,
+      label: (
+        <Space>
+          LLM Configuration
+          {llmConfigured ? (
+            <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>
+              Connected
+            </Tag>
+          ) : (
+            <Tag icon={<CloseCircleOutlined />} color="default" style={{ margin: 0 }}>
+              Not Configured
+            </Tag>
+          )}
+        </Space>
+      )
+    }
+  ];
 
   const renderContent = () => {
     switch (currentMenu) {
@@ -122,6 +152,7 @@ const App = () => {
         return (
           <AnalysisResult
             analysisData={analysisData}
+            analysisId={analysisId}
             llmConfigured={llmConfigured}
             onExportReport={() => setExportModalVisible(true)}
           />
@@ -166,19 +197,25 @@ const App = () => {
       </Header>
       
       <Layout>
-        <Sider width={200} theme="light">
+        <Sider width={240} theme="light">
           <Menu
             mode="inline"
             selectedKeys={[currentMenu]}
             onClick={({ key }) => setCurrentMenu(key)}
-            style={{ height: '100%', borderRight: 0 }}
+            style={{ height: '100%', borderRight: 0, marginTop: 16 }}
             items={menuItems}
           />
         </Sider>
         
         <Layout style={{ padding: '24px' }}>
           <Content>
-            {renderContent()}
+            {loading ? (
+              <div className="loading-container">
+                <Spin size="large" />
+              </div>
+            ) : (
+              renderContent()
+            )}
           </Content>
         </Layout>
       </Layout>

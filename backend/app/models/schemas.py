@@ -82,3 +82,7 @@ class ReportExportRequest(BaseModel):
     analysis_id: str
     format: str = Field(default="html", description="Export format: html, pdf, or json")
     include_visualization: bool = Field(default=True)
+
+class CSSAnalysisResponse(BaseModel):
+    analysis_id: str
+    result: CSSAnalysisResult
