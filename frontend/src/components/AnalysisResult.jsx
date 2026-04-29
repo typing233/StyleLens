@@ -15,7 +15,9 @@ import {
   List,
   Collapse,
   Badge,
-  Empty
+  Empty,
+  Alert,
+  message
 } from 'antd';
 import {
   FileTextOutlined,
@@ -33,7 +35,12 @@ import ForceGraph from './ForceGraph';
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
 
-const AnalysisResult = ({ analysisData, onExportReport, llmConfigured = false }) => {
+const AnalysisResult = ({ 
+  analysisData, 
+  analysisId, 
+  onExportReport, 
+  llmConfigured = false 
+}) => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeModalVisible, setNodeModalVisible] = useState(false);
   const [llmLoading, setLlmLoading] = useState(false);
@@ -66,6 +73,36 @@ const AnalysisResult = ({ analysisData, onExportReport, llmConfigured = false })
   const handleNodeClick = (node) => {
     setSelectedNode(node);
     setNodeModalVisible(true);
+  };
+
+  const handleLLMAnalyze = async () => {
+    setLlmLoading(true);
+    try {
+      const result = await cssAnalyzerApi.llmAnalyze(analysisId);
+      setLlmInsights(result.llm_insights);
+      message.success('AI analysis completed!');
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+      message.error('LLM analysis failed: ' + errorMsg);
+      console.error('LLM analysis failed:', error);
+    } finally {
+      setLlmLoading(false);
+    }
+  };
+
+  const handleLLMRefactor = async () => {
+    setLlmLoading(true);
+    try {
+      const result = await cssAnalyzerApi.llmRefactor(analysisId);
+      setRefactoredCss(result.refactored_css);
+      message.success('Refactored CSS generated!');
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+      message.error('Refactoring failed: ' + errorMsg);
+      console.error('Refactoring failed:', error);
+    } finally {
+      setLlmLoading(false);
+    }
   };
 
   const getSeverityColor = (severity) => {
@@ -418,33 +455,14 @@ const AnalysisResult = ({ analysisData, onExportReport, llmConfigured = false })
                   type="primary"
                   icon={<RobotOutlined />}
                   loading={llmLoading}
-                  onClick={async () => {
-                    setLlmLoading(true);
-                    try {
-                      const result = await cssAnalyzerApi.llmAnalyze('temp');
-                      setLlmInsights(result.llm_insights);
-                    } catch (error) {
-                      console.error('LLM analysis failed:', error);
-                    } finally {
-                      setLlmLoading(false);
-                    }
-                  }}
+                  onClick={handleLLMAnalyze}
                 >
                   Get AI Insights
                 </Button>
                 <Button
                   icon={<CodeOutlined />}
-                  onClick={async () => {
-                    setLlmLoading(true);
-                    try {
-                      const result = await cssAnalyzerApi.llmRefactor('temp');
-                      setRefactoredCss(result.refactored_css);
-                    } catch (error) {
-                      console.error('Refactoring failed:', error);
-                    } finally {
-                      setLlmLoading(false);
-                    }
-                  }}
+                  loading={llmLoading}
+                  onClick={handleLLMRefactor}
                 >
                   Generate Refactored CSS
                 </Button>
@@ -453,7 +471,14 @@ const AnalysisResult = ({ analysisData, onExportReport, llmConfigured = false })
           >
             <Alert
               message="AI-Powered Analysis"
-              description="Use your configured LLM to get deeper insights and automatic refactoring suggestions for your CSS."
+              description={
+                <div>
+                  <p>Use your configured LLM to get deeper insights and automatic refactoring suggestions for your CSS.</p>
+                  {analysisId && (
+                    <p><Text type="secondary">Analysis ID: {analysisId}</Text></p>
+                  )}
+                </div>
+              }
               type="info"
               showIcon
               style={{ marginBottom: 24 }}
@@ -493,6 +518,9 @@ const AnalysisResult = ({ analysisData, onExportReport, llmConfigured = false })
             <FolderOpenOutlined />
             <span>Analysis Results</span>
             <Text type="secondary" code>{url}</Text>
+            {analysisId && (
+              <Tag color="blue">ID: {analysisId.substring(0, 8)}...</Tag>
+            )}
           </Space>
         }
         extra={

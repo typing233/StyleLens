@@ -1,20 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.models.schemas import LLMConfig, LLMTestResult
-from app.services.llm_service import LLMService
+from app.services.shared_services import get_llm_service
 
 router = APIRouter()
 
-_llm_service: LLMService = None
-
-def get_llm_service():
-    global _llm_service
-    if _llm_service is None:
-        _llm_service = LLMService()
-    return _llm_service
-
 @router.post("/llm/configure")
-async def configure_llm(config: LLMConfig, llm_svc: LLMService = Depends(get_llm_service)):
+async def configure_llm(config: LLMConfig):
     try:
+        llm_svc = get_llm_service()
         llm_svc.configure(config)
         
         return {
@@ -34,8 +27,9 @@ async def configure_llm(config: LLMConfig, llm_svc: LLMService = Depends(get_llm
         )
 
 @router.post("/llm/test", response_model=LLMTestResult)
-async def test_llm_connection(config: LLMConfig, llm_svc: LLMService = Depends(get_llm_service)):
+async def test_llm_connection(config: LLMConfig):
     try:
+        llm_svc = get_llm_service()
         result = llm_svc.test_connection(config)
         return result
         
@@ -46,7 +40,8 @@ async def test_llm_connection(config: LLMConfig, llm_svc: LLMService = Depends(g
         )
 
 @router.get("/llm/config")
-async def get_llm_config(llm_svc: LLMService = Depends(get_llm_service)):
+async def get_llm_config():
+    llm_svc = get_llm_service()
     config = llm_svc.get_current_config()
     
     if config is None:
@@ -63,14 +58,16 @@ async def get_llm_config(llm_svc: LLMService = Depends(get_llm_service)):
     }
 
 @router.get("/llm/status")
-async def get_llm_status(llm_svc: LLMService = Depends(get_llm_service)):
+async def get_llm_status():
+    llm_svc = get_llm_service()
     return {
         "configured": llm_svc.is_configured(),
         "message": "LLM service is ready" if llm_svc.is_configured() else "LLM service is not configured"
     }
 
 @router.delete("/llm/config")
-async def clear_llm_config(llm_svc: LLMService = Depends(get_llm_service)):
+async def clear_llm_config():
+    llm_svc = get_llm_service()
     empty_config = LLMConfig(
         base_url="",
         api_key="",
